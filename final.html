@@ -1,0 +1,1451 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row =>
+                    row.some(cell => cell !== '' && cell !== null && cell !== undefined)
+                );
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aqua-28 | Water Quality Monitoring</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        :root {
+            --primary: #1f6e8c;
+            --primary-light: #84a7a1;
+            --secondary: #0e2954;
+            --accent: #2c74b3;
+            --light: #e1f0f0;
+            --dark: #1d3241;
+            --danger: #d9534f;
+            --warning: #f0ad4e;
+            --success: #5cb85c;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9fdff;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .water-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, rgba(225, 240, 255, 0.2) 0%, rgba(210, 233, 255, 0.5) 100%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        .water-ripple {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+CiAgPGRlZnM+CiAgICA8ZmlsdGVyIGlkPSJyaXBwbGUiIHg9Ii0xMDAlIiB5PSItMTAwJSIgd2lkdGg9IjMwMCUiIGhlaWdodD0iMzAwJSI+CiAgICAgIDxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjAxIiBudW1PY3RhdmVzPSIyIiBzdGl0Y2hUaWxlcz0ic3RpdGNoIiByZXN1bHQ9InR1cmJ1bGVuY2UiIC8+CiAgICAgIDxmZURpc3BsYWNlbWVudE1hcCBpbj0iU291cmNlR3JhcGhpYyIgcmVmP1g9InR1cmJ1bGVuY2UiIHJlZlk9InR1cmJ1bGVuY2UiIHNjYWxlPSIxMCIgeENoYW5uZWxTZWxlY3Rvcj0iUiIgeUNoYW5uZWxTZWxlY3Rvcj0iRyIgcmVzdWx0PSJkaXNwbGFjZW1lbnQiIC8+CiAgICA8L2ZpbHRlcj4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idHJhbnNwYXJlbnQiIGZpbHRlcj0idXJsKCNyaXBwbGUpIiAvPgo8L3N2Zz4=');
+            opacity: 0.05;
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 1rem 2rem;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .logo {
+            font-weight: bold;
+            font-size: 1.8rem;
+            color: var(--light);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .logo i {
+            color: #a3d2ca;
+            font-size: 2rem;
+        }
+        
+        .header-title {
+            font-size: 2.2rem;
+            margin: 0 0 0 350px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 1.5rem;
+        }
+        
+        nav a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        
+        nav a:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+        
+        @media (min-width: 1024px) {
+            .dashboard {
+                grid-template-columns: 3fr 1fr;
+            }
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--light);
+            padding-bottom: 1rem;
+        }
+        
+        .card h2 {
+            color: var(--dark);
+            font-size: 1.5rem;
+            margin: 0;
+        }
+        
+        .card-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .control-group label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--dark);
+        }
+        
+        .sensor-select, .date-picker, .viewMode {
+            padding: 0.75rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .sensor-select:hover, .date-picker:hover, .viewMode:hover {
+            border-color: var(--primary-light);
+        }
+        
+        .button {
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .button:hover {
+            background: linear-gradient(90deg, var(--accent), var(--primary));
+            box-shadow: 0 4px 12px rgba(44, 116, 179, 0.3);
+        }
+        
+        .satellite-view {
+            width: 100%;
+            background-color: #f1f7fa;
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            border: 2px solid var(--primary-light);
+            margin-bottom: 1rem;
+        }
+        
+        .satellite-view img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .metric {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            border-radius: 12px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            transition: transform 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .metric:hover {
+            transform: scale(1.05);
+        }
+        
+        .metric.ph {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+        }
+        
+        .metric.oxygen {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+        
+        .metric.fish {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+        
+        .metric.chlorophyll {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        }
+        
+        .metric.turbidity {
+            background: linear-gradient(135deg, #f39c12, #d35400);
+        }
+        
+        .metric.temperature {
+            background: linear-gradient(135deg, #16a085, #1abc9c);
+        }
+        
+        .metric h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric i {
+            font-size: 1.8rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .metric p {
+            font-size: 1.8rem;
+            margin: 0.5rem 0;
+            font-weight: bold;
+        }
+        
+        .metric span {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        
+        .alert {
+            background-color: #fff9e6;
+            border-left: 5px solid var(--warning);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .alert i {
+            font-size: 1.5rem;
+            color: var(--warning);
+        }
+        
+        .alert.critical {
+            background-color: #fdf2f2;
+            border-left-color: var(--danger);
+        }
+        
+        .alert.critical i {
+            color: var(--danger);
+        }
+        
+        footer {
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+        }
+        
+        .footer-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            text-align: left;
+        }
+        
+        .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        
+        .footer-logo i {
+            color: #a3d2ca;
+        }
+        
+        .footer-links h4 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 0.5rem;
+        }
+        
+        .footer-links ul {
+            list-style: none;
+        }
+        
+        .footer-links li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .footer-links a:hover {
+            color: white;
+            text-decoration: underline;
+        }
+        
+        .social-links {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .social-links a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .social-links a:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-3px);
+        }
+        
+        .copyright {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .team-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #ddd;
+            overflow-x: auto;
+        }
+        
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 700;
+            color: #666;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+			font-size: 1.2rem;
+        }
+        
+        .tab-button.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        
+        .tab-button:hover:not(.active) {
+            color: var(--accent);
+            border-bottom-color: #ddd;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .legend {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        
+        .legend h3 {
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+            color: var(--dark);
+        }
+        
+        .legend-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+        
+        .site-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .page-title {
+            font-size: 1.8rem;
+            color: var(--dark);
+            margin: 0;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+        }
+        
+        .stat-icon.blue {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+        }
+        
+        .stat-icon.green {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+        
+        .stat-icon.purple {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        }
+        
+        .stat-icon.orange {
+            background: linear-gradient(135deg, #f39c12, #d35400);
+        }
+        
+        .stat-info h4 {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .stat-info p {
+            margin: 0.25rem 0 0 0;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        
+        #map-container {
+            height: 300px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        
+        /* Modal styles for water metrics */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            width: 80%;
+            max-width: 900px;
+            position: relative;
+            animation: modalFadeIn 0.3s;
+        }
+        
+        @keyframes modalFadeIn {
+            from {opacity: 0; transform: translateY(-50px);}
+            to {opacity: 1; transform: translateY(0);}
+        }
+        
+        .close-modal {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .close-modal:hover {
+            color: var(--dark);
+        }
+        
+        .modal-header {
+            border-bottom: 2px solid var(--light);
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            color: var(--dark);
+        }
+        
+        .modal-body {
+            margin-bottom: 1.5rem;
+        }
+        
+        .metric-tabs {
+            display: flex;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #ddd;
+            overflow-x: auto;
+        }
+        
+        .metric-tab {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+        
+        .metric-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        
+        .metric-tab:hover:not(.active) {
+            color: var(--accent);
+            border-bottom-color: #ddd;
+        }
+        
+        .metric-content {
+            display: none;
+        }
+        
+        .metric-content.active {
+            display: block;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .metric-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .detail-card {
+            background-color: #f9fdff;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .detail-card h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--dark);
+            font-size: 1rem;
+        }
+        
+        .detail-card p {
+            margin: 0;
+            font-size: 0.95rem;
+            color: #666;
+        }
+
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-overlay {
+            position: fixed; /* or absolute if within a relative container */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="water-bg"></div>
+    <div class="water-ripple"></div>
+    
+    <header>
+        <div class="header-container">
+            <div class="logo-container">
+                <div class="logo">
+                    <i class="fas fa-water"></i>
+                    8 Ozer
+                </div>
+                <h1 class="header-title">Aqua-28</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#"><i class="fas fa-home"></i> Home</a></li>
+                    <li><a href="https://2gis.kz/almaty/search/8%20%D0%BE%D0%B7%D0%B5%D1%80/firm/70000001041870952/77.156256%2C43.507068?m=77.179444%2C43.506146%2F12.35" target="_blank"><i class="fas fa-map-marked-alt"></i> Map</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="site-actions">
+            <h2 class="page-title">Water Quality Dashboard</h2>
+            <div class="action-buttons">
+                <button id="shareButton" class="button">
+                    <i class="fas fa-share-alt"></i> Share
+                </button>
+            </div>
+        </div>
+        
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <i class="fas fa-water"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Water Level</h4>
+                    <p>Normal</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <i class="fas fa-thermometer-half"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Avg Temperature</h4>
+                    <p>18.3°C</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <i class="fas fa-cloud-rain"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Precipitation</h4>
+                    <p>2.4 mm</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Alerts</h4>
+                    <p>None</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert">
+            <i class="fas fa-info-circle"></i>
+            <div>
+                <strong>Notice:</strong> Last Sentinel-2 satellite pass: <p id="infoTitle"></p>
+                <div class="loading-spinner" id="loadingSpinnerNotice"></div>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-button active" data-tab="satellite">Satellite View</button>
+            <button class="tab-button" data-tab="metrics">Water Metrics</button>
+        </div>
+        
+        <div class="dashboard">
+            <div class="tab-content active" id="satellite-tab">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Satellite View (Sentinel-2)</h2>
+                    </div>
+                    <div class="card-controls">
+                        <div class="control-group">
+                            <label for="datePicker">Date</label>
+                            <select class="date-picker" id="dateDropdown"></select>
+                            <!-- <input type="date" class="date-picker" id="datePicker" value="2025-04-10"> -->
+                        </div>
+                        <div class="control-group">
+                            <label for="viewMode">View Mode</label>
+                            <select class="viewMode" id="viewMode">
+                                <option value="trueColor">True Color</option>
+                                <option value="falseColor">False Color (NIR)</option>
+                                <option value="ndwi">Normalized Difference Water Index</option>
+                                <option value="chlorophyll">Chlorophyll-a (NDCI)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="satellite-view">
+                        <img id="sentinelImage" alt="Sentinel-2 imagery of 8 Ozer Eco-resort" style="object-fit:cover; display: flex; margin: 0 auto">
+                        <div class="loading-spinner" id="loadingSpinnerSatelliteView" style="display: none"></div>
+                        <!-- <img src="/api/placeholder/800/500" alt="Satellite imagery of water body"> -->
+                    </div>
+                    <div class="legend">
+                        <h3>Legend</h3>
+                        <div class="legend-items">
+                            <div class="legend-item">
+                                <div class="legend-color" style="background-color: #2c74b3;"></div>
+                                <span>Deep Water</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background-color: #84a7a1;"></div>
+                                <span>Shallow Water</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background-color: #f0ad4e;"></div>
+                                <span>Sediment</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background-color: #5cb85c;"></div>
+                                <span>Vegetation</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="metrics-tab">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Water Quality Metrics</h2>
+                    </div>
+                    <div class="metrics">
+                        <div class="metric ph" onclick="openMetricModal('pH')">
+                            <i class="fas fa-flask"></i>
+                            <h3>pH Level</h3>
+                            <p>7.4</p>
+                            <span>Neutral</span>
+                        </div>
+                        <div class="metric oxygen" onclick="openMetricModal('Dissolved Oxygen')">
+                            <i class="fas fa-wind"></i>
+                            <h3>Dissolved O₂</h3>
+                            <p>8.2</p>
+                            <span>mg/L</span>
+                        </div>
+                        <div class="metric chlorophyll" onclick="openMetricModal('Chlorophyll-a')">
+                            <i class="fas fa-leaf"></i>
+                            <h3>Chlorophyll-a</h3>
+                            <p>12.5</p>
+                            <span>µg/L</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="metricModal">
+        <div class="modal-content">
+            <span class="close">×</span>
+            <h2 id="modalTitle">Metric Details</h2>
+            <div class="chart-container">
+                <canvas id="metricChart"></canvas>
+            </div>
+            <div class="metric-details">
+                <div class="current-value">
+                    <h3>Current Value</h3>
+                    <p id="currentValue">-</p>
+                </div>
+                <div class="trend">
+                    <h3>Weekly Trend</h3>
+                    <p id="trendIndicator">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+        
+    <footer>
+        <div class="footer-container">
+            <div class="footer-links">
+                <div class="footer-logo">
+                    <i class="fas fa-water"></i>
+                    Aqua-28
+                </div>
+                <p>Advanced water quality monitoring system for sustainable water resource management.</p>
+                <div class="team-badge">Team 8 Ozer</div>
+                <div class="social-links">
+                    <a href="https://www.facebook.com/shoqan.school/" target="_blank"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://www.linkedin.com/in/shoqan-school-b04202302/" target="_blank"><i class="fab fa-linkedin"></i></a>
+                    <a href="https://www.instagram.com/shoqan_school.kz/" target="_blank"><i class="fab fa-instagram"></i></a>
+                </div>
+            </div>
+            <div class="footer-links">
+                <h4>Quick Links</h4>
+                <ul>
+                    <li><a href="#">Home</a></li>
+                    <li><a href="https://2gis.kz/almaty/search/8%20%D0%BE%D0%B7%D0%B5%D1%80/firm/70000001041870952/77.156256%2C43.507068?m=77.179444%2C43.506146%2F12.35" target="_blank">Map</a></li>
+                    <li><a href="#">Documentation</a></li>
+                </ul>
+            </div>
+            <div class="footer-links">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="#">API Documentation</a></li>
+                    <li><a href="#">Data Sources</a></li>
+                    <li><a href="#">Research Papers</a></li>
+                    <li><a href="#">Case Studies</a></li>
+                </ul>
+            </div>
+            <div class="footer-links">
+                <h4>Contact</h4>
+                <ul>
+                    <li><a href="#">Support</a></li>
+                    <li><a href="#">Feedback</a></li>
+                    <li><a href="#">Partnerships</a></li>
+                    <li><a href="#">Careers</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="copyright">
+            © 2025 Aqua-28 Water Monitoring System. All rights reserved.
+        </div>
+    </footer>
+
+    <script>
+        const evalscripts = {
+            "trueColor": `//VERSION=3\nfunction setup() {\n  return {\n    input: [\"B04\",\"B03\",\"B02\", \"dataMask\"],\n    output: { bands: 4 }\n  };\n}\n\n// Contrast enhance / highlight compress\n\nconst maxR = 3.0; // max reflectance\nconst midR = 0.13;\nconst sat = 1.3;\nconst gamma = 2.3;\n\n// remove the minimum Rayleigh scattering (check the Himalayas)\nconst ray = { r: 0.013, g: 0.024, b: 0.041 };\n\nfunction evaluatePixel(smp) {\n  const rgbLin = satEnh(sAdj(smp.B04 - ray.r), sAdj(smp.B03 - ray.g), sAdj(smp.B02 - ray.b));\n  return [sRGB(rgbLin[0]), sRGB(rgbLin[1]), sRGB(rgbLin[2]), smp.dataMask];\n}\n\nconst sAdj = (a) => adjGamma(adj(a, midR, 1, maxR));\n\nconst gOff = 0.01;\nconst gOffPow = Math.pow(gOff, gamma);\nconst gOffRange = Math.pow(1 + gOff, gamma) - gOffPow;\n\nconst adjGamma = (b) => (Math.pow((b + gOff), gamma) - gOffPow)/gOffRange;\n\n// Saturation enhancement\nfunction satEnh(r, g, b) {\n  const avgS = (r + g + b) / 3.0 * (1 - sat);\n  return [clip(avgS + r * sat), clip(avgS + g * sat), clip(avgS + b * sat)];\n}\n\nconst clip = (s) => s < 0 ? 0 : s > 1 ? 1 : s;\n\n//contrast enhancement with highlight compression\nfunction adj(a, tx, ty, maxC) {\n  var ar = clip(a / maxC, 0, 1);\n  return ar * (ar * (tx/maxC + ty -1) - ty) / (ar * (2 * tx/maxC - 1) - tx/maxC);\n}\n\nconst sRGB = (c) => c <= 0.0031308 ? (12.92 * c) : (1.055 * Math.pow(c, 0.41666666666) - 0.055);`,
+            "falseColor": `//VERSION=3\nlet minVal = 0.0;\nlet maxVal = 0.4;\n\nlet viz = new HighlightCompressVisualizer(minVal, maxVal);\n\nfunction setup() {\n  return {\n    input: [\"B03\", \"B04\", \"B08\",\"dataMask\"],\n    output: { bands: 4 }\n  };\n}\n\nfunction evaluatePixel(samples) {\n    let val = [samples.B08, samples.B04, samples.B03,samples.dataMask];\n    return viz.processList(val);\n}`,
+            "ndwi": `//VERSION=3\n//ndwi\nconst colorRamp1 = [\n    [0, 0xFFFFFF],\n    [1, 0x008000]\n];\nconst colorRamp2 = [\n    [0, 0xFFFFFF],\n    [1, 0x0000CC]\n];\n\nlet viz1 = new ColorRampVisualizer(colorRamp1);\nlet viz2 = new ColorRampVisualizer(colorRamp2);\n\nfunction setup() {\nreturn {\n  input: [\"B03\",\"B04\",\"B08\", \"dataMask\"],\n  output: [\n    { id: \"default\", bands: 4 },\n    { id: \"index\", bands: 1, sampleType: \"FLOAT32\" },\n    { id: \"eobrowserStats\", bands: 2, sampleType: 'FLOAT32' },\n    { id: \"dataMask\", bands: 1 }\n  ]\n};\n}\n\nfunction evaluatePixel(samples) {\nlet val = index(samples.B03, samples.B08);\nlet imgVals = null;\n// The library for tiffs works well only if there is only one channel returned.\n// So we encode the \"no data\" as NaN here and ignore NaNs on frontend.\nconst indexVal = samples.dataMask === 1 ? val : NaN;\n\nif (val < -0) {\n  imgVals = [...viz1.process(-val),samples.dataMask];\n} else {\n  imgVals = [...viz2.process(Math.sqrt(Math.sqrt(val))),samples.dataMask];\n}\n\nreturn {\n  default: imgVals,\n  index: [indexVal],\n  eobrowserStats:[val,isCloud(samples)?1:0],\n  dataMask: [samples.dataMask]\n\n};\n}\n\nfunction isCloud(samples){\n    const NGDR = index(samples.B03, samples.B04);\n    const bRatio = (samples.B03 - 0.175) / (0.39 - 0.175);\n    return bRatio > 1 || (bRatio > 0 && NGDR > 0);\n}`,
+            "chlorophyll": `// CyanoLakes Chlorophyll-a L1C\n// Jeremy Kravitz & Mark Matthews (2020)\n\n// Water body detection - credit Mohor Gartner\nvar MNDWI_threshold=0.42; //testing shows recommended 0.42 for Sentinel-2 and Landsat 8. For the scene in article [1] it was 0.8.\nvar NDWI_threshold=0.4; //testing shows recommended 0.4 for Sentinel-2 and Landsat 8. For the scene in article [1] it was 0.5.\nvar filter_UABS=true;\nvar filter_SSI=false;\nfunction wbi(r,g,b,nir,swir1,swir2) {\n    //water surface\n    let ws=0;\n    //try as it might fail for some pixel\n    try {\n        //calc indices\n        //[4][5][1][8][2][3]\n        var ndvi=(nir-r)/(nir+r),mndwi=(g-swir1)/(g+swir1),ndwi=(g-nir)/(g+nir),ndwi_leaves=(nir-swir1)/(nir+swir1),aweish=b+2.5*g-1.5*(nir+swir1)-0.25*swir2,aweinsh=4*(g-swir1)-(0.25*nir+2.75*swir1);\n        //[10][11][12]\n        var dbsi=((swir1-g)/(swir1+g))-ndvi,wii=Math.pow(nir,2)/r,wri=(g+r)/(nir+swir1),puwi=5.83*g-6.57*r-30.32*nir+2.25,uwi=(g-1.1*r-5.2*nir+0.4)/Math.abs(g-1.1*r-5.2*nir),usi=0.25*(g/r)-0.57*(nir/g)-0.83*(b/g)+1;\n        //DEFINE WB\n        if (mndwi>MNDWI_threshold||ndwi>NDWI_threshold||aweinsh>0.1879||aweish>0.1112||ndvi<-0.2||ndwi_leaves>1) {ws=1;}\n        //filter urban areas [3] and bare soil [10]\n        if (filter_UABS && ws==1) {\n            if ((aweinsh<=-0.03)||(dbsi>0)) {ws=0;}\n        }\n    }catch(err){ws=0;}\n    return ws;\n}\nlet water = wbi(B04,B03,B02,B08,B11,B12);\n\n// Floating vegetation\nfunction FAI (a,b,c) {return (b-a-(c-a)*(783-665)/(865-665))};\nlet FAIv = FAI(B04,B07,B8A);\n\n// Chlorophyll-a\nfunction NDCI (a,b) {return (b-a)/(b+a)};\nlet NDCIv = NDCI(B04,B05);\nlet chl = 826.57 * NDCIv**3 - 176.43 * NDCIv**2 + 19 * NDCIv + 4.071; // From simulated data\n\n// Ture colour\nlet trueColor = [3*B04,3*B03,3*B02];\n\n// Render colour map\nif (water==0) {\n    return trueColor;\n} else if (FAIv>0.08){\n    return [233/255,72/255,21/255];\n} else if (chl<0.5){\n    return [0,0,1.0];\n} else if (chl<1){\n    return [0,0,1.0];\n} else if (chl<2.5){\n    return [0,59/255,1];\n} else if (chl<3.5){\n    return [0,98/255,1];\n} else if (chl<5){\n    return [15/255,113/255,141/255];\n} else if (chl<7){\n    return [14/255,141/255,120/255];\n} else if (chl<8){\n    return [13/255,141/255,103/255];\n} else if (chl<10){\n    return [30/255,226/255,28/255];\n} else if (chl<14){\n    return [42/255,226/255,28/255];\n} else if (chl<18){\n    return [68/255,226/255,28/255];\n} else if (chl<20){\n    return [68/255,226/255,28/255];\n} else if (chl<24){\n    return [134/255,247/255,0];\n} else if (chl<28){\n    return [140/255,247/255,0];\n} else if (chl<30){\n    return [205/255,237/255,0];\n} else if (chl<38){\n    return [208/255,240/255,0];\n} else if (chl<45){\n    return [208/255,240/255,0];\n} else if (chl<50){\n    return [251/255,210/255,3/255];\n} else if (chl<75){\n    return [248/255,207/255,2/255];\n} else if (chl<90){\n    return [134/255,247/255,0];\n} else if (chl<100){\n    return [245/255,164/255,9/255];\n} else if (chl<150){\n    return [240/255,159/255,8/255];\n} else if (chl<250){\n    return [237/255,157/255,7/255];\n} else if (chl<300){\n    return [239/255,118/255,15/255];\n} else if (chl<350){\n    return [239/255,101/255,15/255];\n} else if (chl<450){\n    return [239/255,100/255,14/255];\n} else if (chl<500){\n    return [233/255,72/255,21/255];\n} else return [233/255,72/255,21/255];\n`,
+        }
+
+        const filterModes = ["trueColor", "falseColor", "ndwi", "chlorophyll"];
+
+        const height = 890;
+        const width = 596;
+
+        let authToken = null;
+        let satelliteImageBlobs = {}
+
+        async function getAuthToken() {
+            if(!authToken) {
+                const clientId = "sh-0a65b4fe-4e58-438b-82d5-a01c3cb920a0"
+                const clientSecret = "3zeCe3ImGqLuTgiZdEnI7IsTDa2mSP7c"
+
+                const url = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token';
+
+                const headers = {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8'
+                }
+
+                const formData = new URLSearchParams();
+                formData.append('grant_type', 'client_credentials');
+                formData.append('client_id', clientId);
+                formData.append('client_secret', clientSecret);
+
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: headers,
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    console.log(response);
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                console.log('got token');
+                console.log(data);
+
+                authToken = data.access_token;
+            }
+
+            return authToken;
+        }
+
+        async function getDates() {
+            const url = "https://sh.dataspace.copernicus.eu/api/v1/catalog/1.0.0/search";
+
+            const headers = {
+                "Authorization": `Bearer ${await getAuthToken()}`,
+                'Accept': '*/*',
+                "Content-Type": "application/json",
+            }
+
+            const endDate = new Date();
+            const endDateString = endDate.toISOString();
+
+            let startDate = new Date();
+            startDate.setDate(endDate.getDate() - 365);
+            console.log(startDate);
+            const startDateString = startDate.toISOString();
+
+            const body = {
+                "bbox": [77.142741, 43.496519, 77.175505, 43.531998],
+                "datetime":`${startDateString}/${endDateString}`,
+                "collections":["sentinel-2-l1c"],
+                "filter":{"op":"<=","args":[{"property":"eo:cloud_cover"},30]},"filter-lang":"cql2-json"
+            }
+
+            console.log('getting dates');
+            console.log(body);
+
+            const response = await fetch(url, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify(body)
+            });
+
+            console.log("got response! from get dates");
+            console.log(response);
+
+            const data = await response.json();
+
+            console.log(data);
+
+            const dropdown = document.getElementById("dateDropdown");
+
+            const dates = data.features.map(item => {
+                const date = new Date(item.properties.datetime);
+
+                const option = document.createElement('option');
+                option.value = date.toISOString().split('T')[0];
+                option.text = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                dropdown.appendChild(option);
+
+                return date;
+            })
+
+            console.log(dates);
+
+            document.getElementById("infoTitle").textContent = dates[0].toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            })
+
+            document.getElementById("loadingSpinnerNotice").style.display = 'none'; 
+
+            updateSatelliteImage(dates[0]);
+        }
+
+        getDates();
+
+        async function updateSatelliteImage(date) {
+            // In a real implementation, fetch the image URL based on the mode
+            console.log("fetching image");
+            
+            satelliteImageBlobs = {};
+
+            document.getElementById('sentinelImage').src = "";
+            document.getElementById('loadingSpinnerSatelliteView').style.display = 'flex';
+
+            const url = "https://sh.dataspace.copernicus.eu/api/v1/process";
+
+            console.log(date);
+            const endDate = new Date(date);
+            endDate.setUTCHours(23, 59, 59, 999);
+            const endString = endDate.toISOString();
+
+            const startDate = new Date(date);
+            startDate.setDate(endDate.getDate() - 1);
+            const startString = startDate.toISOString();
+
+            console.log(`querying dates: ${startString}, ${endString}`);
+
+            const token = await getAuthToken();
+
+            const fetchPromises = filterModes.map(mode => {
+                const body = {
+                    "input": {
+                        "bounds": {
+                            "properties": {
+                                "crs": "http://www.opengis.net/def/crs/EPSG/0/3857"
+                            },
+                            "bbox": [
+                                8587490.646517,
+                                5387855.07697,
+                                8591137.918313,
+                                5393301.143988
+                            ]
+                        },
+                        "data": [
+                            {
+                                "dataFilter": {
+                                    "timeRange": {
+                                        "from": startString,
+                                        "to": endString
+                                    },
+                                    "mosaickingOrder": "mostRecent",
+                                    "previewMode": "EXTENDED_PREVIEW",
+                                    "maxCloudCoverage": 30
+                                },
+                                "processing": {},
+                                "type": "S2L1C"
+                            }
+                        ]
+                    },
+                    "output": {
+                        "width": width,
+                        "height": height,
+                        "responses": [
+                        {
+                            "identifier": "default",
+                            "format": {
+                            "type": "image/png"
+                            }
+                        }
+                        ]
+                    },
+                    "evalscript": evalscripts[mode]
+                }
+                
+                return fetch(url, {
+                    method: "POST",
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': '*/*',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                })
+                .then(res => res.blob());
+            });
+
+            const results = await Promise.all(fetchPromises);
+
+            for (let i = 0; i < filterModes.length; i ++) {
+                satelliteImageBlobs[filterModes[i]] = results[i];
+            }
+
+            console.log('done fetching images');
+            console.log(satelliteImageBlobs);
+
+            const mode = document.getElementById('viewMode').value;
+
+            document.getElementById('sentinelImage').src = URL.createObjectURL(satelliteImageBlobs[mode]);
+
+            document.getElementById('loadingSpinnerSatelliteView').style.display = 'none';
+        }
+
+        document.getElementById('dateDropdown').addEventListener('change', async () => {
+            const dropdown = document.getElementById('dateDropdown');
+            
+            await updateSatelliteImage(dropdown.value);
+        });
+
+        document.getElementById('viewMode').addEventListener('change', async (e) => {
+            const mode = e.target.value;
+            const date = document.getElementById('dateDropdown').value;
+            // await updateSatelliteImage(date, mode);
+            // TODO: set image to the given mode
+
+            if (!(mode in satelliteImageBlobs)) {
+                await updateSatelliteImage(date);
+            }   
+
+            document.getElementById('sentinelImage').src = URL.createObjectURL(satelliteImageBlobs[mode]);
+
+        });
+
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        // Add click event listeners to each tab button
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabId = button.getAttribute('data-tab');
+                
+                // Remove active class from all buttons and contents
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+                
+                // Add active class to clicked button and corresponding content
+                button.classList.add('active');
+                document.getElementById(`${tabId}-tab`).classList.add('active');
+            });
+        });
+
+        const metricData = {
+            'pH': {
+                current: 7.4,
+                trend: 'stable',
+                values: [7.2, 7.3, 7.5, 7.4, 7.6, 7.4, 7.4],
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                unit: '',
+                optimalRange: [6.5, 8.5]
+            },
+            'Dissolved Oxygen': {
+                current: 8.2,
+                trend: 'increasing',
+                values: [7.8, 7.9, 8.0, 8.1, 8.0, 8.1, 8.2],
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                unit: 'mg/L',
+                optimalRange: [6, 9]
+            },
+            'Chlorophyll-a': {
+                current: 12.5,
+                trend: 'decreasing',
+                values: [14.2, 13.8, 13.5, 13.0, 12.8, 12.6, 12.5],
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                unit: 'µg/L',
+                optimalRange: [2, 15]
+            }
+        };
+
+        // Modal elements
+        const modal = document.getElementById('metricModal');
+        const closeBtn = document.querySelector('.close');
+        const modalTitle = document.getElementById('modalTitle');
+        const currentValue = document.getElementById('currentValue');
+        const trendIndicator = document.getElementById('trendIndicator');
+        let metricChart = null;
+
+        // Open modal function
+        window.openMetricModal = function(metricName) {
+            modal.style.display = 'block';
+            modalTitle.textContent = `${metricName} Details`;
+            
+            const data = metricData[metricName];
+            currentValue.textContent = `${data.current} ${data.unit}`;
+            
+            // Set trend indicator
+            trendIndicator.textContent = data.trend;
+            trendIndicator.className = 'trend-' + data.trend;
+            
+            // Create or update chart
+            renderMetricChart(metricName, data);
+        };
+
+        // Close modal
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+        };
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        };
+
+        // Chart rendering function
+        function renderMetricChart(metricName, data) {
+            const ctx = document.getElementById('metricChart').getContext('2d');
+            
+            // Destroy previous chart if exists
+            if (metricChart) {
+                metricChart.destroy();
+            }
+            
+            // Determine line color based on metric
+            let lineColor;
+            switch(metricName) {
+                case 'pH':
+                    lineColor = '#5cb85c'; // Green
+                    break;
+                case 'Dissolved Oxygen':
+                    lineColor = '#2c74b3'; // Blue
+                    break;
+                case 'Chlorophyll-a':
+                    lineColor = '#f0ad4e'; // Orange
+                    break;
+                default:
+                    lineColor = '#888';
+            }
+
+            metricChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: metricName,
+                        data: data.values,
+                        borderColor: lineColor,
+                        backgroundColor: lineColor + '20',
+                        borderWidth: 3,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: data.unit ? `Value (${data.unit})` : 'Value'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Day of Week'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${metricName}: ${context.parsed.y} ${data.unit}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Add functionality to the Share button to download a file
+        document.getElementById('shareButton').addEventListener('click', function() {
+            // Create a placeholder file content (replace this with your actual project file)
+            const fileContent = "Aqua-28 Project Overview\n\nThis is a placeholder file for the Aqua-28 water quality monitoring project.\nTeam: 8 Ozer\nDate: April 17, 2025";
+            const fileName = "Aqua-28-Project.txt";
+            
+            // Encode the file content as a data URI
+            const dataUri = 'data:text/plain;charset=utf-8,' + encodeURIComponent(fileContent);
+            
+            // Create a temporary link element to trigger the download
+            const link = document.createElement('a');
+            link.setAttribute('href', dataUri);
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            
+            // Trigger the download
+            link.click();
+            
+            // Clean up by removing the temporary link
+            document.body.removeChild(link);
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'931a65f2fef56744',t:'MTc0NDg3NjkyNS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'931b8268ba92b0d3',t:'MTc0NDg4ODU3Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
